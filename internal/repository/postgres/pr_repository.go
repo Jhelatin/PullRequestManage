@@ -109,3 +109,38 @@ func (r *pgPullRequestRepository) FindByReviewer(ctx context.Context, userID str
 
 	return prs, nil
 }
+
+func (r *pgPullRequestRepository) Update(ctx context.Context, pr domain.PullRequest) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction for update: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	prUpdateQuery := `
+		UPDATE pull_requests
+		SET status = $1, merged_at = $2
+		WHERE pull_request_id = $3
+	`
+	_, err = tx.Exec(ctx, prUpdateQuery, pr.Status, pr.MergedAt, pr.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update pull request row: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `DELETE FROM reviewers WHERE pull_request_id = $1`, pr.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete old reviewers: %w", err)
+	}
+
+	if len(pr.ReviewerIDs) > 0 {
+		reviewerInsertQuery := `INSERT INTO reviewers (pull_request_id, user_id) VALUES ($1, $2)`
+		for _, reviewerID := range pr.ReviewerIDs {
+			_, err = tx.Exec(ctx, reviewerInsertQuery, pr.ID, reviewerID)
+			if err != nil {
+				return fmt.Errorf("failed to insert new reviewer %s: %w", reviewerID, err)
+			}
+		}
+	}
+
+	return tx.Commit(ctx)
+}
