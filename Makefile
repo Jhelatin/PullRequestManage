@@ -28,24 +28,6 @@ generate-client:
 	@mkdir -p internal/client
 	oapi-codegen -generate="types,client" -package=client -o ./internal/client/api_client.go openapi.yaml
 
-run-e2e-tests:
-	go test -v -tags=e2e ./...
-
-test:
-	@echo "--- Ensuring clean state ---"
-	@make down
-	@echo "--- Generating API client from openapi.yaml ---"
-	@make generate-client
-	@echo "--- Starting services in background ---"
-	@make up
-	@echo "--- Waiting for services to be ready (5 seconds)... ---"
-	@sleep 5
-	@echo "--- Running E2E tests ---"
-	@make run-e2e-tests
-	@echo "--- Tearing down services ---"
-	@make down
-	@echo "--- Test run complete! ---"
-
 .PHONY: help
 
 help:
