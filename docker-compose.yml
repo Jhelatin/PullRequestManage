@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: reviewer_app
+    restart: on-failure
+    ports:
+      - "${HTTP_PORT}:8080"
+    env_file:
+      - .env
+    networks:
+      - review-net
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  db:
+    image: postgres:15-alpine
+    container_name: reviewer_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - review-net
+
+  migrate:
+    image: migrate/migrate
+    container_name: reviewer_migrate
+    volumes:
+      - ./migrations:/migrations
+    command: >
+      -path /migrations
+      -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+      up
+    restart: on-failure
+    networks:
+      - review-net
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+
+networks:
+  review-net:
+    driver: bridge
